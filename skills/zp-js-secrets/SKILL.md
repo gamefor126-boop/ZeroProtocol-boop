@@ -205,6 +205,15 @@ what the key type actually authorizes before you write anything.
 - **Reporting a source map as "source code disclosure"** with no impact. Find what the map *reveals*.
 - **Claiming an unclaimed npm name** to prove dependency confusion. That is the attack.
 - **Assuming a JS endpoint exists.** Probe it; dead code is common in bundles.
+- **Reading a 200 as proof a route exists on an SPA.** A catch-all rewrite answers every
+  unknown path with the shell page and 200, so `/.well-known/*` and guessed API paths look
+  "found". Branch on `content-type` and body (`application/json`, or a redirect/error the
+  shell could not produce), and treat CDX rows with status `-` as revisit records pointing
+  at the shell, not as captured documents.
+- **Treating a bundle's own crypto keys as broken crypto.** An AES key plus an HMAC key in
+  the client means the MAC binds nothing a client cannot forge; it is obfuscation. The
+  reportable question is only whether a *server-side* check (session token, freshness,
+  operation-scoped MAC) sits behind it - so state the check you tested, not the key you found.
 - **Ignoring `.map` because no comment points at it.** Try the `.map` URL anyway.
 - **Pasting a bundle into an online beautifier.** That leaks the target's code to a third party.
 - **Grepping only minified output.** Recover the map first; the readable source is where the logic is.

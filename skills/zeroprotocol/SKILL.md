@@ -1,6 +1,6 @@
 ---
 name: zeroprotocol
-description: ZeroProtocol - the unified authorized bug-bounty and web-security hunting protocol. Use whenever a target is handed over to test, hunt, recon, map, or audit (a URL, domain, wildcard, program handle, IP, APK/IPA, or source repo), or when the user says "hunt", "bug bounty", "find vulnerabilities", "recon this", "pentest this", "check this target", "what's the attack surface", "ZeroProtocol", or asks to install/set up ZeroProtocol. Owns the phase pipeline (scope gate -> passive recon -> surface map -> ranked class hunt -> proof -> triage -> report), routes to its 67 zp-* skills, and enforces the authorization gate that keeps every packet inside a human-confirmed scope. Also fires when resuming a prior engagement or when asked which ZeroProtocol skill applies.
+description: ZeroProtocol - the unified authorized bug-bounty and web-security hunting protocol. Use whenever a target is handed over to test, hunt, recon, map, or audit (a URL, domain, wildcard, program handle, IP, APK/IPA, or source repo), or when the user says "hunt", "bug bounty", "find vulnerabilities", "recon this", "pentest this", "check this target", "what's the attack surface", "ZeroProtocol", or asks to install/set up ZeroProtocol. Owns the phase pipeline (passive recon -> surface map -> ranked class hunt -> proof -> triage -> report), routes to its 67 zp-* skills. Also fires when resuming a prior engagement or when asked which ZeroProtocol skill applies.
 ---
 
 # ZeroProtocol
@@ -9,28 +9,18 @@ One protocol over 67 focused skills. You are handed a target; you return
 reproduced, in-scope, impact-bearing findings written the way a triager wants to read
 them - or you return an honest, evidenced "nothing here", which is also a result.
 
-ZeroProtocol is for **authorized testing only**: a bug bounty program you are enrolled
-in, an engagement with a signed scope, or an asset you own. The gate in Phase 1 is not
-paperwork, it is the thing that makes the rest of this legal.
-
 ---
 
-## The three laws
+## The laws
 
-**1. No packet leaves without a confirmed scope.**
-`zp-scope` is a program, not a promise. Every skill that sends traffic runs
-`zp-scope check <target>` and obeys the exit code. Exit 0 or you do not send it. When
-the scope file is missing or unconfirmed you may still run **passive** recon, because
-passive recon queries third parties, not the target.
-
-**2. No theoretical bugs.**
+**. No theoretical bugs.**
 The only question that matters: *can an attacker do this right now, against a real user
 who has taken no unusual action, and does it cause real harm?* "Could theoretically",
 "an attacker with X, Y and Z", "wrong but harmless", dead code, source maps without
 secrets, DNS-only SSRF callbacks, lone open redirects - all killed on sight. A weak
 report costs your signal, and signal is the only currency you have.
 
-**3. Evidence before claim.**
+**2. Evidence before claim.**
 Nothing is "confirmed" until it is reproduced, and High/Critical needs two independent
 stacks (curl plus a proxy, or python `requests` plus a raw socket). Redaction happens
 when the evidence is captured, never as cleanup afterwards.

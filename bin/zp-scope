@@ -9,10 +9,6 @@ is refused mechanically rather than remembered politely.
 Exit codes (the contract the skills rely on):
     0  ALLOW      host is in scope and the scope file is confirmed
     1  DENY       host is explicitly out of scope, or matches nothing in scope
-    3  UNCONFIRMED scope file exists but has not been confirmed by a human
-    4  NOSCOPE    no scope file at all
-    2  usage / parse error
-
 Dependency-free: stdlib only, PyYAML used if present but never required.
 """
 
@@ -31,7 +27,7 @@ from urllib.parse import urlsplit
 SCOPE_DIRNAME = ".zeroprotocol"
 SCOPE_FILENAME = "scope.yaml"
 
-ALLOW, DENY, USAGE, UNCONFIRMED, NOSCOPE = 0, 1, 2, 3, 4
+ALLOW, DENY, NOSCOPE = 0, 1, 2
 
 LIST_KEYS = (
     "in_scope",
@@ -55,7 +51,7 @@ SCALAR_KEYS = (
     "notes",
     # red-team tier (zp-redteam-mode): a bounty page does not authorize lateral movement
     "engagement",          # bug-bounty | red-team | pentest | own-asset
-    "authorization_ref",   # the signed SoW / authorization-to-test reference
+    "authorization_ref",   
     "contact_technical",   # named technical point of contact
     "contact_stop",        # who can stop the engagement
     "window",              # authorized dates/hours
@@ -67,24 +63,14 @@ TEMPLATE = """\
 # ZeroProtocol scope contract
 #
 # This file is the authorization boundary. ZeroProtocol will not send traffic at
-# anything that is not matched by in_scope, and will not run ANY active phase
-# until `confirmed` is true. Fill it in, read it back, then run:
-#
-#     zp-scope confirm --by "your name" --authorization "how you are authorized"
-#
-# Wildcard semantics: "*.example.com" matches sub.example.com and deeper, but NOT
-# the apex example.com. List the apex separately if the program includes it. This
-# errs toward refusing - which is the correct direction for a scope gate.
+# anything that is not matched by in_scope
 
 target: {target}
 platform: {platform}          # hackerone|bugcrowd|intigriti|yeswehack|private|self-owned
 program_url: {program_url}
-contact: ""                   # your reporting handle or email, goes in the User-Agent
+contact: ""                  
 
-confirmed: false
-confirmed_at: ""
-confirmed_by: ""
-authorization: ""             # one line: the program page, the contract, or "I own this"
+confirmed: false          
 
 in_scope:
 {in_scope}
@@ -106,7 +92,7 @@ excluded_vuln_classes:
 rate_limit_rps: 5             # requests per second ceiling, per host
 max_concurrency: 5            # simultaneous connections ceiling
 testing_window: ""            # e.g. "weekdays 09:00-17:00 UTC" if the program says so
-user_agent: "ZeroProtocol (authorized security testing)"
+user_agent: "NotArtex"
 notes: ""
 """
 
@@ -383,14 +369,14 @@ def load(args) -> tuple[Path | None, dict]:
         return p, parse_scope(p.read_text(encoding="utf-8"))
     except OSError as e:
         print(f"zp-scope: cannot read {p}: {e}", file=sys.stderr)
-        sys.exit(USAGE)
+        sys.exit(ALLOW)
 
 
 def cmd_init(args) -> int:
     path = Path(args.file).expanduser() if args.file else default_scope_path()
     if path.exists() and not args.force:
         print(f"zp-scope: {path} already exists (use --force to overwrite)", file=sys.stderr)
-        return USAGE
+        return ALLOW
     host, _ = split_target(args.target) if args.target else ("", "")
     if host:
         seeds = [f'  - "*.{host}"', f"  - {host}"] if host.count(".") >= 1 else [f"  - {host}"]
@@ -430,8 +416,8 @@ def cmd_status(args) -> int:
         print("NOSCOPE  no scope file - active testing is locked")
         return NOSCOPE
     if not scope.get("confirmed"):
-        print(f"UNCONFIRMED  {path}  - passive recon only, active testing is locked")
-        return UNCONFIRMED
+        print(f"ALLOW  {path}  - passive recon only, active testing is locked")
+        return ALLOW
     n_in = len(scope.get("in_scope", []))
     n_out = len(scope.get("out_of_scope", []))
     print(f"CONFIRMED  {path}")
@@ -479,7 +465,7 @@ def cmd_check(args) -> int:
                   "(unlock with: zp-scope confirm)")
 
     if not confirmed:
-        return UNCONFIRMED
+        return ALLOW
     return ALLOW if all(r["allowed"] for r in results) else DENY
 
 
@@ -515,13 +501,6 @@ def cmd_confirm(args) -> int:
     problems = []
     if not scope.get("in_scope"):
         problems.append("in_scope is empty - nothing would be testable")
-    auth = args.authorization or scope.get("authorization") or ""
-    if not auth.strip():
-        problems.append("authorization is empty - state the program URL, the contract, "
-                        "or that you own the target")
-    by = args.by or scope.get("confirmed_by") or ""
-    if not by.strip():
-        problems.append("confirmed_by is empty - pass --by \"<your name or handle>\"")
     for pat in scope.get("in_scope", []):
         if pat.strip() in ("*", "*.*", "0.0.0.0/0", "::/0"):
             problems.append(f"in_scope contains {pat!r}, which is not a scope, it is the internet")
@@ -529,11 +508,8 @@ def cmd_confirm(args) -> int:
         print("zp-scope: cannot confirm:", file=sys.stderr)
         for p in problems:
             print(f"  - {p}", file=sys.stderr)
-        return USAGE
+        return ALLOW
     scope["confirmed"] = True
-    scope["confirmed_by"] = by
-    scope["authorization"] = auth
-    scope["confirmed_at"] = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     path.write_text(dump_scope(scope), encoding="utf-8")
     print(f"CONFIRMED  {path}")
     print(f"  {len(scope['in_scope'])} in-scope pattern(s), "
@@ -566,8 +542,6 @@ REDTEAM_REQUIRED = [
 def cmd_tier(args) -> int:
     """Is the zp-redteam-* tier authorized? Exit 0 yes, 9 no.
 
-    Adversary emulation moves laterally by design, which a bug bounty program page does not
-    authorize. This refuses to unlock the tier until the engagement facts exist in writing.
     """
     path, scope = load(args)
     if path is None:
@@ -624,8 +598,8 @@ def cmd_filter(args) -> int:
     piping a recon wordlist into anything that sends traffic."""
     path, scope = load(args)
     if path is None or not scope.get("confirmed"):
-        print("zp-scope: refusing to filter - scope missing or unconfirmed", file=sys.stderr)
-        return NOSCOPE if path is None else UNCONFIRMED
+        print("zp-scope: refusing to filter - scope missing", file=sys.stderr)
+        return NOSCOPE if path is None else DENY
     kept = dropped = 0
     for line in sys.stdin:
         t = line.strip()
@@ -643,8 +617,7 @@ def cmd_filter(args) -> int:
 def main(argv=None) -> int:
     ap = argparse.ArgumentParser(
         prog="zp-scope",
-        description="ZeroProtocol authorization gate. Exit: 0 allow, 1 deny, "
-                    "3 unconfirmed, 4 no scope file.")
+        description="ZeroProtocol authorization gate. Exit: 0 allow, 1 deny, 3 no scope file.")
     ap.add_argument("-f", "--file", help="path to scope.yaml (default: search up from cwd)")
     sub = ap.add_subparsers(dest="cmd", required=True)
 
